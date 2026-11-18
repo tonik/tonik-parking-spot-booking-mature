@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
-import { useActionState, useEffect, useTransition } from "react"
+import { useActionState, useEffect, useRef, useTransition } from "react"
 import { toast } from "sonner"
 
 import {
@@ -22,6 +22,10 @@ import { Textarea } from "@/components/ui/textarea"
 
 import { cancelBooking, updateBooking, type BookingFormState } from "./actions"
 import { RequiredMark } from "./required-mark"
+import {
+  submitKeepingValues,
+  useBookingErrorToast,
+} from "./use-booking-error-toast"
 
 type BookingDetailsFormProps = {
   booking: {
@@ -45,6 +49,8 @@ export function BookingDetailsForm({
     BookingFormState,
     FormData
   >(updateBooking, { status: "idle" })
+  const formRef = useRef<HTMLFormElement>(null)
+  useBookingErrorToast(state, formRef)
 
   useEffect(() => {
     if (state.status === "success") toast("Changes saved")
@@ -55,7 +61,10 @@ export function BookingDetailsForm({
       const result = await cancelBooking(booking.id)
       if (!result.ok) {
         toast("We couldn't delete this booking", {
-          description: "Try again in a moment.",
+          id: "booking-error",
+          description: "Check your connection and try again.",
+          duration: 8000,
+          action: { label: "Try again", onClick: handleDelete },
         })
         return
       }
@@ -67,7 +76,11 @@ export function BookingDetailsForm({
   }
 
   return (
-    <form action={formAction} className="flex flex-1 flex-col">
+    <form
+      ref={formRef}
+      onSubmit={submitKeepingValues(formAction)}
+      className="flex flex-1 flex-col"
+    >
       <input type="hidden" name="bookingId" value={booking.id} />
       <div className="flex flex-col gap-4 px-8">
         <div className="flex flex-col gap-1">
@@ -103,11 +116,6 @@ export function BookingDetailsForm({
             rows={1}
           />
         </div>
-        {state.status === "error" && (
-          <p role="alert" className="text-sm text-destructive">
-            {state.message}
-          </p>
-        )}
       </div>
       <div className="mt-auto flex flex-col gap-2 p-8">
         <Button type="submit" className="w-full" disabled={isSaving}>

@@ -7,8 +7,33 @@ import { createClient } from "@/lib/supabase/server"
 
 export type BookingFormState =
   | { status: "idle" }
-  | { status: "error"; message: string }
+  | {
+      status: "error"
+      title: string
+      description: string
+      /** The button the error toast offers as a way out, if any. */
+      wayOut?: BookingWayOut
+      /** Lets the form show the same error twice in a row. */
+      failedAt: number
+    }
   | { status: "success"; bookedAt: number }
+
+export type BookingWayOut =
+  "showFreeSpaces" | "goToToday" | "startOver" | "retry"
+
+function bookingError(
+  title: string,
+  description: string,
+  wayOut?: BookingWayOut,
+): BookingFormState {
+  return { status: "error", title, description, wayOut, failedAt: Date.now() }
+}
+
+const missingNameOrPlate = () =>
+  bookingError(
+    "Add a name and a license plate",
+    "We need both so others know whose car it is.",
+  )
 
 function readText(formData: FormData, name: string) {
   return String(formData.get(name) ?? "").trim()
@@ -25,14 +50,13 @@ export async function createBooking(
   const note = readText(formData, "note")
 
   if (!Number.isInteger(spotId) || !isIsoDate(day)) {
-    return { status: "error", message: "Invalid request." }
+    return bookingError(
+      "Something went wrong with this booking",
+      "Pick a day and a space again.",
+      "startOver",
+    )
   }
-  if (!driverName || !licensePlate) {
-    return {
-      status: "error",
-      message: "Name and plate required.",
-    }
-  }
+  if (!driverName || !licensePlate) return missingNameOrPlate()
 
   const supabase = await createClient()
   const { error } = await supabase.from("bookings").insert({
@@ -44,24 +68,34 @@ export async function createBooking(
   })
 
   if (error?.code === "23505") {
-    return {
-      status: "error",
-      message: "Spot taken.",
-    }
+    return bookingError(
+      "This space was just booked",
+      "Someone got to it a moment before you.",
+      "showFreeSpaces",
+    )
   }
   // 42501: row-level security refused the insert (the day is in the past).
+  if (error?.code === "42501") {
+    return bookingError(
+      "This day has already passed",
+      "You can book from today onwards.",
+      "goToToday",
+    )
+  }
   // 23514: a check constraint failed (weekend).
-  if (error?.code === "42501" || error?.code === "23514") {
-    return {
-      status: "error",
-      message: "Date not allowed.",
-    }
+  if (error?.code === "23514") {
+    return bookingError(
+      "Weekends can't be booked",
+      "Spaces are only for weekdays.",
+      "goToToday",
+    )
   }
   if (error) {
-    return {
-      status: "error",
-      message: "Booking failed.",
-    }
+    return bookingError(
+      "We couldn't save your booking",
+      "Your details are still here. Check your connection and try again.",
+      "retry",
+    )
   }
 
   revalidatePath("/")
@@ -78,12 +112,7 @@ export async function updateBooking(
   const licensePlate = readText(formData, "licensePlate").toUpperCase()
   const note = readText(formData, "note")
 
-  if (!driverName || !licensePlate) {
-    return {
-      status: "error",
-      message: "Name and plate required.",
-    }
-  }
+  if (!driverName || !licensePlate) return missingNameOrPlate()
 
   const supabase = await createClient()
   const { error } = await supabase
@@ -96,7 +125,11 @@ export async function updateBooking(
     .eq("id", bookingId)
 
   if (error) {
-    return { status: "error", message: "Update failed." }
+    return bookingError(
+      "We couldn't save your changes",
+      "Your edits are still here. Check your connection and try again.",
+      "retry",
+    )
   }
 
   revalidatePath("/bookings")

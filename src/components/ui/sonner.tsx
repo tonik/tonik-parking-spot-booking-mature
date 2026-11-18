@@ -16,6 +16,8 @@ const Toaster = ({ ...props }: ToasterProps) => {
             "flex w-80 flex-col gap-1 bg-primary p-6 text-sm text-primary-foreground",
           title: "font-medium",
           description: "text-primary-foreground-muted",
+          actionButton:
+            "mt-2 self-start cursor-pointer font-medium underline underline-offset-4 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary-foreground",
         },
       }}
       {...props}

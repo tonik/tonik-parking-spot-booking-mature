@@ -1,6 +1,6 @@
 "use client"
 
-import { useActionState, useEffect } from "react"
+import { useActionState, useEffect, useRef } from "react"
 import { toast } from "sonner"
 
 import { Button } from "@/components/ui/button"
@@ -10,6 +10,10 @@ import { Textarea } from "@/components/ui/textarea"
 
 import { createBooking, type BookingFormState } from "./actions"
 import { RequiredMark } from "./required-mark"
+import {
+  submitKeepingValues,
+  useBookingErrorToast,
+} from "./use-booking-error-toast"
 
 type BookingFormProps = {
   spotId: number
@@ -28,6 +32,8 @@ export function BookingForm({
     BookingFormState,
     FormData
   >(createBooking, { status: "idle" })
+  const formRef = useRef<HTMLFormElement>(null)
+  useBookingErrorToast(state, formRef, day)
 
   useEffect(() => {
     if (state.status === "success") {
@@ -38,7 +44,11 @@ export function BookingForm({
   }, [state])
 
   return (
-    <form action={formAction} className="flex flex-1 flex-col">
+    <form
+      ref={formRef}
+      onSubmit={submitKeepingValues(formAction)}
+      className="flex flex-1 flex-col"
+    >
       <input type="hidden" name="spotId" value={spotId} />
       <input type="hidden" name="day" value={day} />
       <div className="flex flex-col gap-4 px-8">
@@ -71,11 +81,6 @@ export function BookingForm({
           <Label htmlFor="note">Note</Label>
           <Textarea id="note" name="note" placeholder="e.g. 9–5" rows={1} />
         </div>
-        {state.status === "error" && (
-          <p role="alert" className="text-sm text-destructive">
-            {state.message}
-          </p>
-        )}
       </div>
       <div className="mt-auto flex flex-col gap-4 p-8">
         <Button type="submit" className="w-full" disabled={isPending}>
